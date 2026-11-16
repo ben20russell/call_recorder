@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "call-recorder"
+version = "0.1.0"
+description = "Local call recording, transcription, and searchable notes"
+requires-python = ">=3.11"
+dependencies = [
+    "Markdown>=3.5",
+    "numpy>=2.1,<3",
+    "icalendar>=5.0",
+    "recurring-ical-events>=2.1",
+]
+
+[project.optional-dependencies]
+macos = [
+    "mlx-whisper>=0.4",
+    "sherpa-onnx>=1.10",
+]
+mcp = ["mcp>=1.0"]
+
+[project.scripts]
+callrec = "recorder.__main__:main"
+
+[tool.setuptools]
+packages = ["recorder"]
+
+[tool.setuptools.package-data]
+recorder = ["static/*"]

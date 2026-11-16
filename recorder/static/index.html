@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Call Recorder</title>
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="side-top">
+        <div class="brand"><span class="logo" aria-hidden="true"></span>Call Recorder</div>
+        <button id="new-btn" class="icon-btn" title="New recording"></button>
+      </div>
+      <label class="side-search">
+        <span id="search-icon"></span>
+        <input id="side-search" type="search" placeholder="Search" autocomplete="off" aria-label="Search notes and transcripts">
+        <kbd>⌘K</kbd>
+      </label>
+      <button id="side-live" class="side-live" hidden></button>
+      <nav class="side-nav">
+        <button id="nav-home" class="side-item"></button>
+        <button id="nav-upcoming" class="side-item"></button>
+        <button id="nav-todos" class="side-item"></button>
+        <button id="nav-calls" class="side-item"></button>
+      </nav>
+      <div id="side-recent" class="side-recent" aria-label="Recent calls"></div>
+      <div class="side-foot">
+        <div id="side-status" class="side-status"></div>
+        <button id="settings-btn" class="side-item"></button>
+      </div>
+    </aside>
+    <div id="side-resize" class="side-resize" role="separator" aria-orientation="vertical" aria-label="Sidebar width"
+         aria-valuemin="200" tabindex="0" title="Drag to change the sidebar’s width · double-click to reset"></div>
+
+    <main class="main">
+      <div id="banner" class="banner" hidden></div>
+      <section id="content" class="content"></section>
+    </main>
+  </div>
+
+  <div id="tpanel" class="tpanel" hidden>
+    <div class="tpanel-head">
+      <span class="tpanel-title">Transcript</span>
+      <span id="tpanel-extra" class="tpanel-extra"></span>
+      <button id="tpanel-close" class="icon-btn" title="Close transcript"></button>
+    </div>
+    <div id="tpanel-body" class="tpanel-body"></div>
+  </div>
+  <div id="dock" class="dock" hidden></div>
+  <div id="menu" class="menu" hidden></div>
+  <div id="toasts" class="toasts"></div>
+
+  <dialog id="settings" class="settings">
+    <form method="dialog" id="settings-form">
+      <div class="settings-head">
+        <h2>Settings</h2>
+        <button value="cancel" class="ghost">Close</button>
+      </div>
+      <div class="settings-body">
+        <fieldset>
+          <legend>Permissions</legend>
+          <ul id="perm-list" class="perm-list"></ul>
+          <p class="hint">None of these need an admin. Anything not allowed yet: click the button and answer the macOS prompts.</p>
+          <button type="button" id="perm-request" class="secondary">Ask for permissions</button>
+        </fieldset>
+        <fieldset>
+          <legend>You</legend>
+          <label>Your name <input name="my_name"></label>
+          <label>Your team, for Live To-Dos (besides you) <input name="todo_people" placeholder="Tyler, Luwam, Margot"></label>
+          <label>Label for the other side <input name="other_label"></label>
+          <label>Recordings folder <input name="recordings_dir"></label>
+        </fieldset>
+        <fieldset>
+          <legend>Audio</legend>
+          <label>Microphone <select name="mic_device"><option value="">System default</option></select></label>
+          <label class="check"><input type="checkbox" name="capture_system"> Record system audio (the other side of the call)</label>
+          <label class="check"><input type="checkbox" name="live_transcription"> Live transcription while recording</label>
+          <label>Whisper model
+            <select name="whisper_model">
+              <option value="mlx-community/whisper-large-v3-turbo">large-v3-turbo (best)</option>
+              <option value="mlx-community/whisper-small-mlx">small (faster, less accurate)</option>
+            </select>
+          </label>
+          <label>Language <input name="language" placeholder="en — leave empty to auto-detect"></label>
+        </fieldset>
+        <fieldset>
+          <legend>Claude</legend>
+          <label>Write notes with
+            <select name="claude_backend">
+              <option value="cli">My Claude login (Claude Code)</option>
+              <option value="api">An Anthropic API key</option>
+            </select>
+          </label>
+          <div id="claude-login" class="claude-login">
+            <span id="claude-login-status" class="pill"></span>
+            <button type="button" id="claude-signin" class="secondary">Sign in…</button>
+            <button type="button" id="claude-recheck" class="secondary" hidden>Check again</button>
+          </div>
+          <label id="api-key-field">Anthropic API key <input name="secret:anthropic_api_key" type="password" autocomplete="off"></label>
+          <p class="hint" id="claude-hint"></p>
+          <label>Model
+            <select name="claude_model">
+              <option value="claude-opus-5-5">Claude Opus 5.5</option>
+              <option value="claude-sonnet-5-5">Claude Sonnet 5.5</option>
+              <option value="claude-haiku-5-5">Claude Haiku 5.5</option>
+            </select>
+          </label>
+        </fieldset>
+        <fieldset>
+          <legend>Calendar</legend>
+          <label>Source
+            <select name="calendar.source">
+              <option value="macos">macOS Calendar app (includes Google calendars added to it)</option>
+              <option value="ics">ICS feed URL (e.g. Google Calendar secret address)</option>
+              <option value="off">Off</option>
+            </select>
+          </label>
+          <div class="cal-pick" id="cal-pick">
+            <div class="cal-pick-label">Meetings come from</div>
+            <div id="cal-list"></div>
+          </div>
+          <label>ICS URL <input name="calendar.ics_url" placeholder="https://calendar.google.com/calendar/ical/…/basic.ics"></label>
+          <label>Show calls this many days ahead <input name="calendar.days_ahead" type="number" min="1" max="30"></label>
+          <label class="check"><input type="checkbox" name="calendar.notify"> Pop up when a call on my calendar starts</label>
+          <label class="check"><input type="checkbox" name="detect_calls"> Pop up when Zoom, Teams, Meet or another call app turns on my microphone</label>
+          <label class="check"><input type="checkbox" name="stop_when_call_ends"> Stop recording when I leave the call</label>
+          <label class="check"><input type="checkbox" name="calendar.auto_record"> Record calls automatically, once I've joined them</label>
+          <label>Auto-stop after the scheduled end once the call has been silent for (minutes, 0 = never)
+            <input name="calendar.auto_stop_silence_minutes" type="number" min="0" max="30"></label>
+        </fieldset>
+        <fieldset>
+          <legend>Google Meet names</legend>
+          <div class="claude-login"><span id="meet-status" class="pill"></span></div>
+          <p class="hint">On Meet calls, a small Chrome extension tells Call Recorder the names on the call and whose
+            tile shows them talking, so transcripts say who said what, and when you leave the call, so the recording
+            stops even when you go straight on to another Meet call. It reads nothing else and sends only to
+            Call Recorder on this Mac.</p>
+          <ol class="steps" id="meet-steps">
+            <li>In Chrome, go to <b>chrome://extensions</b> <button type="button" class="link" data-copy="chrome://extensions">Copy</button>
+              and turn on <b>Developer mode</b> (top right).</li>
+            <li>Click <b>Load unpacked</b>, press <b>⌘⇧G</b>, paste the extension’s folder
+              <button type="button" class="link" id="meet-copy-folder">Copy folder</button>, press Return, then click <b>Select</b>.</li>
+            <li>That’s it. During your next Meet call, this shows <b>Connected</b>.</li>
+          </ol>
+        </fieldset>
+        <fieldset>
+          <legend>Apple Notes</legend>
+          <label>Folder <input name="apple_notes.folder"></label>
+          <label class="check"><input type="checkbox" name="apple_notes.auto_save"> Save notes to Apple Notes after each call</label>
+        </fieldset>
+      </div>
+      <div class="settings-foot">
+        <span id="settings-msg" class="hint"></span>
+        <button id="settings-save" type="button" class="primary">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="/static/editor.js"></script>
+  <script src="/static/app.js"></script>
+</body>
+</html>

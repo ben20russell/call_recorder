@@ -1,0 +1,45 @@
+{
+  "manifest_version": "0.3",
+  "name": "call-recorder",
+  "display_name": "Call Recorder",
+  "version": "1.0.2",
+  "description": "Search and read your recorded calls (AI notes, full transcripts, your own notes and action items) straight from the Call Recorder app on this Mac.",
+  "long_description": "Asks the Call Recorder app running on this Mac, so Claude always sees your latest calls and nothing is copied anywhere else. The extension reads none of your files itself: Call Recorder does, with the access it already has. Calls you delete in Call Recorder disappear here too. Call Recorder needs to be running.",
+  "author": {
+    "name": "Call Recorder"
+  },
+  "icon": "icon.png",
+  "server": {
+    "type": "binary",
+    "entry_point": "server/proxy.py",
+    "mcp_config": {
+      "command": "/usr/bin/python3",
+      "args": [
+        "${__dirname}/server/proxy.py"
+      ]
+    }
+  },
+  "tools": [
+    {
+      "name": "search_calls",
+      "description": "Search every recorded call (titles, people, AI notes, your notes, transcripts) and return the matching passages."
+    },
+    {
+      "name": "list_calls",
+      "description": "List recorded calls, newest first, with who was on them and a summary."
+    },
+    {
+      "name": "get_call",
+      "description": "Read one call's notes or its full timestamped transcript."
+    },
+    {
+      "name": "list_action_items",
+      "description": "Action items from recorded calls, filterable by owner and date."
+    }
+  ],
+  "compatibility": {
+    "platforms": [
+      "darwin"
+    ]
+  }
+}

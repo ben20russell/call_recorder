@@ -1,0 +1,202 @@
+{
+ "instructions": "Ben's recorded calls from Call Recorder: AI-written notes, full transcripts (who said what, with timestamps), Ben's own notes, and action items. Use search_calls to find where something was discussed, then get_call for the full notes or transcript. In transcripts, \"Ben\" is Ben's microphone. Other people are labeled by name when their voice was recognized or named; \"Speaker 1\", \"Speaker 2\"… are voices nobody has named yet, and \"Them\" is everyone else mixed together (older calls). \"Mic\" means only the microphone was recorded, so it can be either side. Quote the call title and date when you answer from a call.",
+ "tools": [
+  {
+   "name": "search_calls",
+   "description": "Search all recorded calls — titles, participants, AI notes, your own notes and full transcripts — and\n    return the best-matching calls with the passages that match. Use keywords (names, projects, topics);\n    words are matched as prefixes, so \"launch\" also finds \"launches\". since/until are dates (YYYY-MM-DD);\n    person limits results to calls with that participant (name or email). Follow up with get_call to read\n    a whole call.",
+   "inputSchema": {
+    "properties": {
+     "query": {
+      "title": "Query",
+      "type": "string"
+     },
+     "since": {
+      "default": "",
+      "title": "Since",
+      "type": "string"
+     },
+     "until": {
+      "default": "",
+      "title": "Until",
+      "type": "string"
+     },
+     "person": {
+      "default": "",
+      "title": "Person",
+      "type": "string"
+     },
+     "limit": {
+      "default": 8,
+      "title": "Limit",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "query"
+    ],
+    "title": "search_callsArguments",
+    "type": "object"
+   },
+   "outputSchema": {
+    "properties": {
+     "result": {
+      "title": "Result",
+      "type": "string"
+     }
+    },
+    "required": [
+     "result"
+    ],
+    "title": "search_callsOutput",
+    "type": "object"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "openWorldHint": false
+   }
+  },
+  {
+   "name": "list_calls",
+   "description": "List recorded calls, newest first, with who was on them and a one-paragraph summary. since/until are\n    dates (YYYY-MM-DD); person filters by participant name or email.",
+   "inputSchema": {
+    "properties": {
+     "since": {
+      "default": "",
+      "title": "Since",
+      "type": "string"
+     },
+     "until": {
+      "default": "",
+      "title": "Until",
+      "type": "string"
+     },
+     "person": {
+      "default": "",
+      "title": "Person",
+      "type": "string"
+     },
+     "limit": {
+      "default": 20,
+      "title": "Limit",
+      "type": "integer"
+     }
+    },
+    "title": "list_callsArguments",
+    "type": "object"
+   },
+   "outputSchema": {
+    "properties": {
+     "result": {
+      "title": "Result",
+      "type": "string"
+     }
+    },
+    "required": [
+     "result"
+    ],
+    "title": "list_callsOutput",
+    "type": "object"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "openWorldHint": false
+   }
+  },
+  {
+   "name": "get_call",
+   "description": "Read one call. call_id is the id from search_calls/list_calls, \"last\" for the most recent call, or a\n    unique part of its title. part=\"notes\" gives the AI notes (summary, notes, decisions, action items,\n    open questions) plus your own notes; part=\"transcript\" gives the full timestamped transcript, in pages\n    of max_chars — pass the next_offset it reports to continue.",
+   "inputSchema": {
+    "properties": {
+     "call_id": {
+      "title": "Call Id",
+      "type": "string"
+     },
+     "part": {
+      "default": "notes",
+      "title": "Part",
+      "type": "string"
+     },
+     "offset": {
+      "default": 0,
+      "title": "Offset",
+      "type": "integer"
+     },
+     "max_chars": {
+      "default": 30000,
+      "title": "Max Chars",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "call_id"
+    ],
+    "title": "get_callArguments",
+    "type": "object"
+   },
+   "outputSchema": {
+    "properties": {
+     "result": {
+      "title": "Result",
+      "type": "string"
+     }
+    },
+    "required": [
+     "result"
+    ],
+    "title": "get_callOutput",
+    "type": "object"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "openWorldHint": false
+   }
+  },
+  {
+   "name": "list_action_items",
+   "description": "Action items from recorded calls, newest calls first. owner filters by who owns the item (a name, or\n    \"me\" for your own); since/until are dates (YYYY-MM-DD).",
+   "inputSchema": {
+    "properties": {
+     "since": {
+      "default": "",
+      "title": "Since",
+      "type": "string"
+     },
+     "until": {
+      "default": "",
+      "title": "Until",
+      "type": "string"
+     },
+     "owner": {
+      "default": "",
+      "title": "Owner",
+      "type": "string"
+     },
+     "limit": {
+      "default": 60,
+      "title": "Limit",
+      "type": "integer"
+     }
+    },
+    "title": "list_action_itemsArguments",
+    "type": "object"
+   },
+   "outputSchema": {
+    "properties": {
+     "result": {
+      "title": "Result",
+      "type": "string"
+     }
+    },
+    "required": [
+     "result"
+    ],
+    "title": "list_action_itemsOutput",
+    "type": "object"
+   },
+   "annotations": {
+    "readOnlyHint": true,
+    "openWorldHint": false
+   }
+  }
+ ]
+}

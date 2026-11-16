@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 18 18">
+  <style>
+    .tile { fill: #2d5bb5; } .dot { fill: #fbfcfe; }
+    @media (prefers-color-scheme: dark) { .tile { fill: #7fa6f0; } .dot { fill: #0e1524; } }
+  </style>
+  <rect class="tile" width="18" height="18" rx="6"/>
+  <circle class="dot" cx="9" cy="9" r="4"/>
+</svg>

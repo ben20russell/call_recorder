@@ -1,0 +1,13 @@
+{
+  "manifest_version": 3,
+  "name": "Call Recorder for Google Meet",
+  "version": "1.1.0",
+  "description": "Tells the Call Recorder app on this Mac the names on your Meet call, whose tile shows them talking, and when you leave, so transcripts say who said what and recordings stop when you leave.",
+  "icons": { "16": "icon16.png", "48": "icon48.png", "128": "icon128.png" },
+  "background": { "service_worker": "background.js" },
+  "content_scripts": [
+    { "matches": ["https://meet.google.com/*"], "js": ["mic.js"], "run_at": "document_start", "world": "MAIN", "all_frames": false },
+    { "matches": ["https://meet.google.com/*"], "js": ["meet.js"], "run_at": "document_idle", "all_frames": false }
+  ],
+  "host_permissions": ["http://127.0.0.1/*"]
+}

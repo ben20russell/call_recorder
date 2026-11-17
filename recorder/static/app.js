@@ -846,20 +846,11 @@ function renderHome(root) {
   const firstDays = [...new Set(coming.map((e) => dayKey(e.start)))].slice(0, 2);
   const shown = coming.filter((e) => firstDays.includes(dayKey(e.start)));
 
-  const children = [
-    h('div', { class: 'page-head home-head' },
-      h('div', { class: 'grow' }, h('h1', { class: 'page-title' }, 'Your workspace'),
-        h('div', { class: 'page-sub' }, 'Your calls, notes and next steps.')),
-      h('button', { class: 'primary', onclick: () => (state.recording ? go({ kind: 'live' }) : startRecording()) },
-        'New recording')),
-    searchBar(),
-    h('div', { class: 'section-head' },
-      h('span', { class: 'section-label' }, 'Coming up'),
-      h('div', { class: 'section-actions' },
-        h('button', { class: 'icon-btn small', title: 'Refresh calendar', 'aria-label': 'Refresh calendar',
-          onclick: (e) => refreshCalendar(e.currentTarget) }, icon('refresh')),
-        h('button', { class: 'link', onclick: () => go({ kind: 'upcoming', pinned: true }) }, 'See all'))),
-  ];
+  const children = [searchBar(), h('div', { class: 'section-head' }, h('span', { class: 'section-label' }, 'Coming up'),
+    h('div', { class: 'section-actions' },
+      h('button', { class: 'icon-btn small', title: 'Refresh calendar', 'aria-label': 'Refresh calendar',
+        onclick: (e) => refreshCalendar(e.currentTarget) }, icon('refresh')),
+      h('button', { class: 'link', onclick: () => go({ kind: 'upcoming', pinned: true }) }, 'See all')))];
   children.push(calendarProblem(cal)
     || (shown.length ? eventCard(shown, now, 4)
       : notice(`No calls with other people in the next ${cal.days_ahead || 7} days.`)));

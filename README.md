@@ -19,6 +19,26 @@ python3 -m venv .venv
 The web app is served only on `127.0.0.1:8765`. For development and UI testing without audio
 permissions, set `CALLREC_SIMULATE` to a directory containing `mic.wav` and/or `system.wav`.
 
+## Google Calendar
+
+Run Call Recorder on your Mac for Google sign-in. In Settings → Calendar, choose **Google
+Calendar**. In Google Cloud, enable the Google Calendar API, configure the OAuth consent screen
+(add `ben20russell@gmail.com` as a test user if the app is in Testing mode), and create an OAuth
+client for a web application. Add the redirect URI shown in Settings to the client's authorized
+redirect URIs. Paste its client ID and secret, then choose **Sign in with Google** and select
+`ben20russell@gmail.com`. The Codespaces forwarding domain may not satisfy Google's domain
+verification requirements. Call Recorder requests read-only calendar access; the refresh token is
+stored in macOS Keychain (or a user-only `~/.callrec/secrets.json` on systems without Keychain).
+
+## Claude account
+
+In Settings → Claude, choose **My Claude login (Claude Code)** and click **Install & sign in**.
+Call Recorder installs Claude Code using Anthropic's official installer when needed, then opens
+Terminal and your browser to sign in with your Claude account. A Claude Pro, Max, or eligible team
+account is required; this uses your Claude account rather than Anthropic API-key billing. If Call
+Recorder is running outside macOS, run `./callrec login` in that environment's terminal, then click
+**Check again** in Settings.
+
 ## macOS app
 
 On macOS 14.2 or newer with Xcode Command Line Tools installed:

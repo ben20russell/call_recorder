@@ -69,7 +69,6 @@
         <fieldset>
           <legend>You</legend>
           <label>Your name <input name="my_name"></label>
-          <label>Your team, for Live To-Dos (besides you) <input name="todo_people" placeholder="Tyler, Luwam, Margot"></label>
           <label>Label for the other side <input name="other_label"></label>
           <label>Recordings folder <input name="recordings_dir"></label>
         </fieldset>
@@ -84,7 +83,7 @@
               <option value="mlx-community/whisper-small-mlx">small (faster, less accurate)</option>
             </select>
           </label>
-          <label>Language <input name="language" placeholder="en — leave empty to auto-detect"></label>
+          <label hidden>Language <input name="language" placeholder="en — leave empty to auto-detect"></label>
         </fieldset>
         <fieldset>
           <legend>Claude</legend>
@@ -114,12 +113,28 @@
           <label>Source
             <select name="calendar.source">
               <option value="macos">macOS Calendar app (includes Google calendars added to it)</option>
+              <option value="google">Google Calendar (read-only)</option>
               <option value="ics">ICS feed URL (e.g. Google Calendar secret address)</option>
               <option value="off">Off</option>
             </select>
           </label>
+          <div id="google-calendar-settings" hidden>
+            <label>Google OAuth client ID <input name="calendar.google_client_id" autocomplete="off"></label>
+            <label>Google OAuth client secret
+              <input name="secret:google_client_secret" type="password" autocomplete="off"></label>
+            <p class="hint">Use a Google Cloud OAuth client for a web application. Add this exact redirect URI to the client.
+              Local Mac sign-in is recommended; Google may not accept a Codespaces domain.</p>
+            <p><code id="google-redirect-uri"></code>
+              <button type="button" class="link" id="google-copy-redirect">Copy</button></p>
+            <div class="claude-login">
+              <span id="google-calendar-status" class="pill"></span>
+              <button type="button" class="secondary" id="google-connect">Sign in with Google</button>
+              <button type="button" class="secondary" id="google-disconnect" hidden>Disconnect</button>
+            </div>
+            <p class="hint">Connects only to ben20russell@gmail.com and requests read-only access to calendar events.</p>
+          </div>
           <div class="cal-pick" id="cal-pick">
-            <div class="cal-pick-label">Meetings come from</div>
+            <div class="cal-pick-label" id="cal-pick-label">Meetings come from</div>
             <div id="cal-list"></div>
           </div>
           <label>ICS URL <input name="calendar.ics_url" placeholder="https://calendar.google.com/calendar/ical/…/basic.ics"></label>

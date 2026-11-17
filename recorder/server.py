@@ -5,15 +5,19 @@ import contextlib
 import ctypes
 import json
 import mimetypes
+import os
 import queue
 import re
+import shlex
 import signal
 import subprocess
+import sys
 import threading
 import time
 import traceback
 import webbrowser
 from datetime import datetime, timedelta
+from html import escape
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -21,7 +25,7 @@ from urllib.parse import parse_qs, urlparse
 
 import markdown as md
 
-from . import HELPER, ROOT, STATIC, ask, audio, calendar_src, config, integrations, live, meet, meetings, pipeline, prep, search, speakers, todos, transcribe
+from . import HELPER, ROOT, STATIC, ask, audio, calendar_src, config, google_calendar, integrations, live, meet, meetings, pipeline, prep, search, speakers, todos, transcribe
 from .capture import CaptureError
 from .detect import MicWatcher, Popup, is_browser
 from .session import Session, finish_parts
@@ -60,6 +64,23 @@ class HTTPError(Exception):
         self.status, self.message, self.hint = status, message, hint
 
 
+def launch_claude_login() -> None:
+    if sys.platform != "darwin":
+        raise HTTPError(
+            501,
+            "Run ./callrec login in the VS Code terminal for this environment, then click Check again.",
+        )
+    login_script = ROOT / "scripts" / "claude-login.command"
+    if not login_script.is_file():
+        raise HTTPError(500, "The Claude sign-in launcher is missing.")
+    command = f"/bin/bash {shlex.quote(str(login_script))}"
+    applescript = f'tell application "Terminal" to do script {json.dumps(command)}'
+    try:
+        subprocess.run(["osascript", "-e", applescript], check=True)
+    except (OSError, subprocess.CalledProcessError) as e:
+        raise HTTPError(500, f"Couldn't open Terminal for Claude sign-in: {e}")
+
+
 def notify(title: str, message: str) -> None:
     esc = lambda s: s.replace("\\", "\\\\").replace('"', '\\"')
     subprocess.run(["osascript", "-e",
@@ -83,13 +104,16 @@ def render_md(text: str) -> str:
 
 
 class App:
-    def __init__(self, cfg: dict):
+    def __init__(self, cfg: dict, port: int = 8765):
         self.cfg = cfg
+        self.port = port
         self.session: Session | None = None
         self.lock = threading.RLock()
         self.clients: list[queue.Queue] = []
         self.live_seen = 0.0  # when a page last said it's showing the live transcript (time.monotonic)
         self.calendar = calendar_src.CalendarCache(lambda: self.cfg)
+        self.google_oauth_pending: dict[str, dict] = {}
+        self.google_oauth_lock = threading.Lock()
         self.jobs: dict[str, dict] = {}
         self.job_runs: dict[str, tuple[threading.Thread, threading.Event]] = {}  # processing threads, to call off
         self.prompted: set[str] = set()
@@ -742,6 +766,8 @@ class App:
         return {"events": events, "current": current, "next": upcoming, "error": self.calendar.error,
                 "calendars": self.calendar.calendars, "watching": cal.get("calendars") or [],
                 "source": cal.get("source", "macos"), "days_ahead": cal.get("days_ahead", 7),
+                "google_email": cal.get("google_email", ""),
+                "google_connected": bool(config.get_secret("google_refresh_token")),
                 "auto_record": bool(cal.get("auto_record"))}
 
     # -- views -------------------------------------------------------------------------------------
@@ -772,7 +798,73 @@ class App:
     def settings(self) -> dict:
         from .summarize import backend, cli_status
         return {**self.cfg, "secrets": config.secret_status(), "claude_backend_resolved": backend(self.cfg),
-                "claude_login": cli_status(), "recordings_path": str(config.recordings_dir(self.cfg))}
+                "claude_login": cli_status(), "claude_login_terminal": sys.platform == "darwin",
+                "recordings_path": str(config.recordings_dir(self.cfg))}
+
+    def google_redirect_uri(self, host: str) -> str:
+        host = host.lower()
+        if host in {f"127.0.0.1:{self.port}", f"localhost:{self.port}"}:
+            return f"http://localhost:{self.port}/api/google/callback"
+        codespace = os.environ.get("CODESPACE_NAME", "").lower()
+        forwarding_domain = os.environ.get("GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN", "").lower()
+        expected = f"{codespace}-{self.port}.{forwarding_domain}" if codespace and forwarding_domain else ""
+        if expected and host == expected:
+            return f"https://{host}/api/google/callback"
+        raise HTTPError(400, "Google sign-in is only available from this app's local or Codespaces address.")
+
+    def google_login(self, redirect_uri: str) -> dict:
+        client_id = self.cfg.get("calendar", {}).get("google_client_id", "").strip()
+        if not client_id:
+            raise HTTPError(400, "Add your Google OAuth client ID in Settings first.")
+        if not config.get_secret("google_client_secret"):
+            raise HTTPError(400, "Add your Google OAuth client secret in Settings first.")
+        with self.google_oauth_lock:
+            cutoff = time.monotonic() - 600
+            self.google_oauth_pending = {
+                key: value for key, value in self.google_oauth_pending.items() if value["created"] > cutoff
+            }
+            state, verifier = google_calendar.new_state(), google_calendar.new_code_verifier()
+            self.google_oauth_pending[state] = {
+                "verifier": verifier, "redirect_uri": redirect_uri, "created": time.monotonic(),
+            }
+        return {"url": google_calendar.authorization_url(
+            client_id, redirect_uri, state, verifier, "ben20russell@gmail.com")}
+
+    def google_callback(self, query: dict, host: str) -> tuple[str, bool]:
+        state = query.get("state", [""])[0]
+        with self.google_oauth_lock:
+            pending = self.google_oauth_pending.pop(state, None)
+        if not state or not pending or time.monotonic() - pending["created"] > 600:
+            return "This Google sign-in expired or could not be verified. Close this window and try again.", False
+        error = query.get("error", [""])[0]
+        if error:
+            return f"Google sign-in was not completed: {escape(error)}. You can close this window.", False
+        code = query.get("code", [""])[0]
+        if not code:
+            return "Google did not return an authorization code. Close this window and try again.", False
+        try:
+            redirect_uri = pending["redirect_uri"]
+            if redirect_uri != self.google_redirect_uri(host):
+                raise google_calendar.GoogleCalendarError("The sign-in address changed. Start again from Settings.")
+            tokens = google_calendar.exchange_code(
+                self.cfg.get("calendar", {}).get("google_client_id", "").strip(),
+                config.get_secret("google_client_secret"), code, redirect_uri, pending["verifier"],
+            )
+            email = google_calendar.account_email(tokens["access_token"])
+            if email.casefold() != "ben20russell@gmail.com":
+                raise google_calendar.GoogleCalendarError(
+                    f"Signed in as {email}, not ben20russell@gmail.com. Choose the requested Google account and try again.")
+            refresh_token = tokens.get("refresh_token") or config.get_secret("google_refresh_token")
+            if not refresh_token:
+                raise google_calendar.GoogleCalendarError(
+                    "Google didn't return a refresh token. Remove this app from your Google Account permissions and try again.")
+            config.set_secret("google_refresh_token", refresh_token)
+            self.cfg = config.update({"calendar": {"source": "google", "google_email": email}})
+            self.calendar.refresh(force=True)
+            self.broadcast("calendar", self.calendar_state())
+            return f"Google Calendar connected as {escape(email)}. You can close this window.", True
+        except (google_calendar.GoogleCalendarError, OSError, RuntimeError, subprocess.SubprocessError) as e:
+            return f"Couldn't connect Google Calendar: {escape(str(e))}", False
 
     @staticmethod
     def can_record_onto(meeting) -> bool:
@@ -835,7 +927,12 @@ class Handler(BaseHTTPRequestHandler):
     # -- plumbing ----------------------------------------------------------------------------------
     def _check_host(self) -> bool:
         host = self.headers.get("Host", "")
-        if host not in (f"127.0.0.1:{self.port}", f"localhost:{self.port}"):
+        allowed = {f"127.0.0.1:{self.port}", f"localhost:{self.port}"}
+        codespace = os.environ.get("CODESPACE_NAME", "").lower()
+        forwarding_domain = os.environ.get("GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN", "").lower()
+        if codespace and forwarding_domain:
+            allowed.add(f"{codespace}-{self.port}.{forwarding_domain}")
+        if host.lower() not in allowed:
             self.send_error(HTTPStatus.FORBIDDEN, "Bad host")
             return False
         return True
@@ -875,6 +972,27 @@ class Handler(BaseHTTPRequestHandler):
         url = urlparse(self.path)
         path = url.path
         try:
+            if method == "GET" and path == "/api/google/callback":
+                message, connected = self.app.google_callback(parse_qs(url.query), self.headers.get("Host", ""))
+                post_message = json.dumps({
+                    "type": "callrec-google-oauth", "ok": connected, "message": message,
+                }).replace("<", "\\u003c")
+                payload = (
+                    "<!doctype html><meta charset=utf-8><title>Google Calendar</title>"
+                    "<main style=\"font:16px system-ui;max-width:36rem;margin:12vh auto;padding:24px\">"
+                    f"<h1>{'Connected' if connected else 'Sign-in not completed'}</h1><p>{message}</p>"
+                    "<p>You can close this window and return to Call Recorder.</p></main>"
+                    "<script>if(window.opener){window.opener.postMessage("
+                    f"{post_message},location.origin);if({str(connected).lower()})window.close();}}</script>"
+                ).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Content-Length", str(len(payload)))
+                self.send_header("Cache-Control", "no-store")
+                self.send_header("Content-Security-Policy", "default-src 'none'; script-src 'unsafe-inline'")
+                self.end_headers()
+                self.wfile.write(payload)
+                return
             if method == "GET" and (path == "/" or path.startswith("/static/")):
                 return self._static("index.html" if path == "/" else path[len("/static/"):])
             if method == "GET" and path == "/api/stream":
@@ -928,6 +1046,8 @@ class Handler(BaseHTTPRequestHandler):
                 return app.meeting_detail(self._meeting(_unquote(m.group(1))))
             if path == "/api/settings":
                 return app.settings()
+            if path == "/api/google/redirect-uri":
+                return {"redirect_uri": app.google_redirect_uri(self.headers.get("Host", ""))}
             if path == "/api/todos":  # Live To-Dos: ?days=14 (empty: every call)
                 days = query.get("days", ["14"])[0]
                 return todos.collect(app.cfg, int(days) if days.isdigit() else None)
@@ -945,6 +1065,20 @@ class Handler(BaseHTTPRequestHandler):
             raise HTTPError(404, "Not found")
 
         body = self._body()
+        if path == "/api/google/login":
+            redirect_uri = app.google_redirect_uri(self.headers.get("Host", ""))
+            return app.google_login(redirect_uri)
+        if path == "/api/google/disconnect":
+            config.set_secret("google_refresh_token", "")
+            app.cfg = config.update({"calendar": {
+                "google_email": "",
+                "source": (
+                    "macos" if app.cfg.get("calendar", {}).get("source") == "google"
+                    else app.cfg.get("calendar", {}).get("source", "macos")
+                ),
+            }})
+            app.calendar.refresh(force=True)
+            return {"ok": True}
         if path == "/api/record/start":
             if body.get("when_joined"):  # a "call is starting" Record button: from when you're in the call
                 event = app.calendar.get(str(body.get("event_id", "")))
@@ -999,8 +1133,8 @@ class Handler(BaseHTTPRequestHandler):
             out = subprocess.run([str(HELPER), "request-permissions"], capture_output=True, text=True, timeout=180).stdout
             return json.loads(out.strip().splitlines()[-1])
         if path == "/api/claude/login":
-            # Signing in needs a terminal (the CLI may ask you to paste a code from the browser).
-            subprocess.run(["open", "-a", "Terminal", str(ROOT / "scripts" / "claude-login.command")], check=True)
+            # Install Claude Code if needed, then sign in interactively with a Claude account.
+            launch_claude_login()
             return {"ok": True}
         if path == "/api/prompt/dismiss":
             app.prompt = None
@@ -1251,7 +1385,7 @@ def serve(cfg: dict, port: int = 8765, open_browser: bool = True) -> None:
     except OSError:
         raise SystemExit(f"Call Recorder is already running on port {port} (http://127.0.0.1:{port}/).")
     server.daemon_threads = True
-    app = handler.app = App(cfg)
+    app = handler.app = App(cfg, port)
     url = f"http://127.0.0.1:{port}/"
     print(f"Call Recorder running at {url}  (Ctrl-C to quit)")
     threading.Thread(target=app.calendar.refresh, kwargs={"force": True}, daemon=True).start()

@@ -160,6 +160,18 @@ def fetch(cfg: dict, start: datetime | None = None, end: datetime | None = None,
         if not cal.get("ics_url"):
             raise CalendarError("No ICS URL set in Settings.")
         events = _from_ics(cal["ics_url"], start, end, cfg.get("my_email", ""))
+    elif source == "google":
+        from . import config, google_calendar
+        client_id = cal.get("google_client_id", "").strip()
+        if not client_id:
+            raise CalendarError("Add a Google OAuth client ID in Settings before connecting.")
+        try:
+            events = google_calendar.fetch_events(
+                client_id, config.get_secret("google_client_secret"),
+                config.get_secret("google_refresh_token"), start, end,
+            )
+        except google_calendar.GoogleCalendarError as e:
+            raise CalendarError(str(e)) from e
     else:
         events = _from_macos(start, end, sync)
     seen, unique = set(), []

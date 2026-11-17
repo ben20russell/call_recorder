@@ -1884,7 +1884,7 @@ async function openSettings() {
     if (!field.name) continue;
     if (field.name.startsWith('secret:')) {
       field.value = '';
-      field.placeholder = s.secrets[field.name.slice(7)] ? '•••••••• saved in Keychain — type to replace' : 'Not set';
+      field.placeholder = s.secrets[field.name.slice(7)] ? '•••••••• saved securely — type to replace' : 'Not set';
       continue;
     }
     const value = getPath(s, field.name);
@@ -1895,6 +1895,7 @@ async function openSettings() {
     }
   }
   renderCalendarList(s);
+  await loadGoogleCalendar(s);
   renderClaude();
   $('#settings-msg').textContent = '';
   $('#settings').showModal();
@@ -1908,7 +1909,9 @@ async function openSettings() {
 function renderCalendarList(s) {
   const names = (state.calendar && state.calendar.calendars) || [];
   const chosen = (s.calendar && s.calendar.calendars) || [];
-  $('#cal-pick').hidden = !names.length || (s.calendar && s.calendar.source) !== 'macos';
+  const source = s.calendar && s.calendar.source;
+  $('#cal-pick').hidden = !names.length || !['macos', 'google'].includes(source);
+  $('#cal-pick-label').textContent = source === 'google' ? 'Include these Google calendars' : 'Meetings come from';
   $('#cal-list').replaceChildren(...names.map((name) => h('label', { class: 'check' },
     h('input', { type: 'checkbox', value: name, checked: !chosen.length || chosen.includes(name) }), name)));
 }
@@ -1919,21 +1922,121 @@ function chosenCalendars() {
   return ticked.length === boxes.length ? [] : ticked;  // all ticked: keep following new calendars too
 }
 
+async function loadGoogleCalendar(settings) {
+  const calendar = settings.calendar || {};
+  $('#google-calendar-settings').hidden = calendar.source !== 'google';
+  const connected = !!(state.calendar && state.calendar.google_connected);
+  const email = calendar.google_email || (state.calendar && state.calendar.google_email) || '';
+  const status = $('#google-calendar-status');
+  status.className = `pill${connected ? ' ok' : ' rec'}`;
+  status.textContent = connected ? `Connected · ${email || 'Google account'}` : 'Not connected';
+  $('#google-connect').hidden = connected;
+  $('#google-disconnect').hidden = !connected;
+  $('#google-connect').disabled = !calendar.google_client_id;
+  try {
+    const { redirect_uri: redirectUri } = await api('/api/google/redirect-uri');
+    $('#google-redirect-uri').textContent = redirectUri;
+  } catch (e) {
+    $('#google-redirect-uri').textContent = e.message;
+  }
+}
+
+form.elements['calendar.source'].addEventListener('change', () => {
+  state.settings.calendar.source = form.elements['calendar.source'].value;
+  renderCalendarList(state.settings);
+  loadGoogleCalendar(state.settings);
+});
+form.elements['calendar.google_client_id'].addEventListener('input', (e) => {
+  $('#google-connect').disabled = !e.target.value.trim();
+});
+
+$('#google-copy-redirect').addEventListener('click', () =>
+  copyText($('#google-redirect-uri').textContent, 'the Google OAuth redirect URI'));
+
+$('#google-connect').addEventListener('click', async (e) => {
+  const button = e.currentTarget;
+  const popup = window.open('about:blank', 'callrec-google-calendar', 'popup,width=520,height=720');
+  if (!popup) {
+    $('#settings-msg').textContent = 'Allow pop-ups for this page, then try Google sign-in again.';
+    return;
+  }
+  button.disabled = true;
+  $('#settings-msg').textContent = 'Opening Google sign-in…';
+  try {
+    const secrets = {};
+    const clientSecret = form.elements['secret:google_client_secret'].value.trim();
+    if (clientSecret) secrets.google_client_secret = clientSecret;
+    state.settings = await api('/api/settings', {
+      calendar: { google_client_id: form.elements['calendar.google_client_id'].value.trim() },
+      secrets,
+    });
+    const { url } = await api('/api/google/login', {});
+    popup.location = url;
+    $('#settings-msg').textContent = 'Choose ben20russell@gmail.com in the Google window.';
+  } catch (err) {
+    popup.close();
+    $('#settings-msg').textContent = err.message;
+  } finally {
+    button.disabled = false;
+  }
+});
+
+window.addEventListener('message', async (event) => {
+  if (event.origin !== location.origin || event.data?.type !== 'callrec-google-oauth') return;
+  $('#settings-msg').textContent = event.data.message;
+  if (event.data.ok) {
+    try {
+      state.settings = await api('/api/settings');
+      form.elements['calendar.source'].value = state.settings.calendar.source;
+      state.calendar = (await api('/api/state')).calendar;
+      renderCalendarList(state.settings);
+      await loadGoogleCalendar(state.settings);
+      renderSidebar();
+      renderContent();
+    } catch (err) {
+      $('#settings-msg').textContent = err.message;
+    }
+  }
+});
+
+$('#google-disconnect').addEventListener('click', async (e) => {
+  e.currentTarget.disabled = true;
+  try {
+    await api('/api/google/disconnect', {});
+    state.settings = await api('/api/settings');
+    form.elements['calendar.source'].value = state.settings.calendar.source;
+    state.calendar = (await api('/api/state')).calendar;
+    renderCalendarList(state.settings);
+    await loadGoogleCalendar(state.settings);
+    renderSidebar();
+    renderContent();
+    $('#settings-msg').textContent = 'Google Calendar disconnected.';
+  } catch (err) {
+    $('#settings-msg').textContent = err.message;
+  } finally {
+    e.currentTarget.disabled = false;
+  }
+});
+
 function renderClaude() {
   const s = state.settings, login = s.claude_login || {};
   const useKey = form.elements.claude_backend.value === 'api';
+  const canOpenTerminal = s.claude_login_terminal !== false;
   $('#claude-login').hidden = useKey;
   $('#api-key-field').hidden = !useKey;
   const status = $('#claude-login-status');
   status.className = `pill${login.logged_in ? ' ok' : ' rec'}`;
   status.textContent = login.logged_in ? `Signed in${login.account ? ` as ${login.account}` : ''}`
-    : login.found ? 'Not signed in' : 'Claude Code not found';
-  $('#claude-signin').hidden = login.logged_in || !login.found;
+    : login.found ? 'Not signed in' : 'Claude Code not installed';
+  $('#claude-signin').hidden = login.logged_in || !canOpenTerminal;
+  $('#claude-signin').textContent = login.found ? 'Sign in with Claude…' : 'Install & sign in…';
+  $('#claude-recheck').hidden = login.logged_in || canOpenTerminal;
   $('#claude-hint').textContent = useKey
     ? (s.secrets.anthropic_api_key ? 'API key saved. Notes are billed to your Anthropic API account.' : 'Get a key at console.anthropic.com.')
     : login.logged_in ? 'Notes are written with your Claude account. No API key needed.'
-    : login.found ? 'Sign in once with your Claude account. A Terminal window and your browser will open.'
-    : 'Claude Code comes with the Claude desktop app. Update or reinstall Claude, or use an API key.';
+    : canOpenTerminal
+      ? 'Use your Claude Pro, Max, or eligible team account. If needed, Claude Code will be installed from Anthropic first; a Terminal window and browser will open.'
+      : 'In the VS Code terminal, run ./callrec login. If Claude Code is missing, the command prints the install step. Then click Check again.';
 }
 
 form.elements.claude_backend.addEventListener('change', renderClaude);

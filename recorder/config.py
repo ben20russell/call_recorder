@@ -3,12 +3,14 @@
 import copy
 import json
 import os
+import shutil
 import subprocess
 import threading
 from pathlib import Path
 
 CONFIG_DIR = Path(os.environ.get("CALLREC_HOME") or Path.home() / ".callrec")
 CONFIG_PATH = CONFIG_DIR / "config.json"
+SECRETS_PATH = CONFIG_DIR / "secrets.json"
 KEYCHAIN_SERVICE = "callrec"
 
 DEFAULTS = {
@@ -28,10 +30,11 @@ DEFAULTS = {
     "claude_model": "claude-opus-5-5",
     "claude_effort": "medium",
     "port": 8765,
-    "todo_people": "",  # Live To-Dos: whose to-dos to show besides yours ("Tyler, Luwam, Margot")
     "calendar": {
-        "source": "macos",  # macos | ics | off
+        "source": "macos",  # macos | google | ics | off
         "ics_url": "",
+        "google_client_id": "",
+        "google_email": "",
         "notify": True,
         "auto_record": False,
         "auto_stop_silence_minutes": 3,
@@ -47,6 +50,8 @@ DEFAULTS = {
 # Secret name -> environment variable that overrides the Keychain value.
 SECRETS = {
     "anthropic_api_key": "ANTHROPIC_API_KEY",
+    "google_client_secret": "GOOGLE_CLIENT_SECRET",
+    "google_refresh_token": "GOOGLE_REFRESH_TOKEN",
 }
 
 _lock = threading.Lock()
@@ -96,6 +101,11 @@ def get_secret(name: str) -> str:
     env = os.environ.get(SECRETS[name], "")
     if env:
         return env
+    if not shutil.which("security"):
+        try:
+            return str(json.loads(SECRETS_PATH.read_text()).get(name, ""))
+        except (FileNotFoundError, json.JSONDecodeError):
+            return ""
     result = subprocess.run(
         ["security", "find-generic-password", "-s", KEYCHAIN_SERVICE, "-a", name, "-w"],
         capture_output=True, text=True,
@@ -106,6 +116,23 @@ def get_secret(name: str) -> str:
 def set_secret(name: str, value: str) -> None:
     if name not in SECRETS:
         raise KeyError(name)
+    if not shutil.which("security"):
+        try:
+            values = json.loads(SECRETS_PATH.read_text())
+        except (FileNotFoundError, json.JSONDecodeError):
+            values = {}
+        if value:
+            values[name] = value
+        else:
+            values.pop(name, None)
+        CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+        tmp = SECRETS_PATH.with_suffix(".tmp")
+        with os.fdopen(os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), "w") as file:
+            os.fchmod(file.fileno(), 0o600)
+            file.write(json.dumps(values, indent=2))
+        tmp.replace(SECRETS_PATH)
+        SECRETS_PATH.chmod(0o600)
+        return
     if not value:
         subprocess.run(["security", "delete-generic-password", "-s", KEYCHAIN_SERVICE, "-a", name],
                        capture_output=True)

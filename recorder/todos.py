@@ -1,8 +1,7 @@
-"""Live To-Dos: the to-dos for you and the people you choose (Settings → Live To-Dos), gathered from every
-call's notes. Recorded calls have the action items Claude wrote; notes imported from Granola have them in
-their "Next Steps" section, as "**Task** (Owner)", "Owner: task" or "Owner to do something". The list is
-re-read from the notes each time, so it follows new and re-processed calls; what you tick off is remembered
-in ~/.callrec/todos.json.
+"""Live To-Dos: the to-dos assigned to you, gathered from every call's notes. Recorded calls have the
+action items Claude wrote; notes imported from Granola have them in their "Next Steps" section, as
+"**Task** (Owner)", "Owner: task" or "Owner to do something". The list is re-read from the notes each
+time, so it follows new and re-processed calls; what you tick off is remembered in ~/.callrec/todos.json.
 """
 
 import hashlib
@@ -24,10 +23,8 @@ SAME_CALL = 15 * 60  # a Granola note this close to a recorded call is the same 
 
 
 def people(cfg: dict) -> list[str]:
-    """Whose to-dos to show: Settings' list, with you first (you're always on it)."""
-    names = [n.strip() for n in re.split(r"[,;\n]", cfg.get("todo_people") or "") if n.strip()]
-    me = cfg.get("my_name") or "Me"
-    return [me] + [n for n in names if _first(n) != _first(me)]
+    """Whose to-dos to show: just the current user."""
+    return [cfg.get("my_name") or "Me"]
 
 
 def _first(name: str) -> str:

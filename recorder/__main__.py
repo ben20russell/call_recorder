@@ -128,7 +128,7 @@ def cmd_doctor(args, cfg):
         elif status["found"]:
             print("✗ Claude: not signed in — run ./callrec login")
         else:
-            print("✗ Claude: Claude Code not found (it comes with the Claude desktop app)")
+            print("✗ Claude: Claude Code not found — install it from https://claude.com/product/claude-code")
     print(f"  recordings: {config.recordings_dir(cfg)}")
     if args.test:
         import time
@@ -149,11 +149,13 @@ def cmd_login(args, cfg):
     from .summarize import cli_env, cli_status, find_claude_cli
     cli = find_claude_cli()
     if not cli:
-        print("Claude Code wasn't found. It comes with the Claude desktop app.")
+        print("Claude Code wasn't found. Install it with:\n"
+              "  curl -fsSL https://claude.ai/install.sh | bash\n"
+              "Then run ./callrec login again.")
         return 1
     print("Sign in to Claude so Call Recorder can write your call notes with your Claude account.\n"
           "Your browser will open; sign in there and come back here.\n")
-    subprocess.run([cli, "auth", "login", "--claudeai"], env=cli_env())
+    subprocess.run([cli, "auth", "login"], env=cli_env())
     status = cli_status()
     if not status["logged_in"]:
         print("\n✗ Not signed in yet. Run ./callrec login to try again.")

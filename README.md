@@ -61,6 +61,8 @@ prompts are also handled by the helper.
 
 The Swift code cannot be built or exercised on Linux. Build and verify the native app on a
 supported Mac using the commands above, then grant the requested permissions in System Settings.
+For live recording, the Call Recorder server must also run on that Mac; a browser connected to a
+server running in Linux (such as a Codespace) cannot give that server access to the Mac's audio.
 
 The `macos` extra installs `mlx-whisper` and `sherpa-onnx`; transcription and voice identification
 are intended for Apple Silicon Macs. MCP support requires the optional `mcp` dependency.

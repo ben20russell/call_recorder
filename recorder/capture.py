@@ -5,6 +5,7 @@ can be exercised without permissions or a live call."""
 import json
 import os
 import subprocess
+import sys
 import threading
 import time
 import wave
@@ -35,6 +36,12 @@ class HelperCapture:
         self._stderr: list[str] = []
 
     def start(self, timeout: float = 120) -> None:  # long enough to answer permission prompts
+        if sys.platform != "darwin":
+            raise CaptureError(
+                "Live audio recording requires Call Recorder to run on macOS.",
+                "This server is running on Linux and cannot access your Mac's microphone or system audio. "
+                "Run Call Recorder on your Mac to record live audio.",
+            )
         if not HELPER.exists():
             raise CaptureError("The capture helper isn't built.", "Run ./swift/build.sh")
         cmd = [str(HELPER), "record", "--out", str(self.out_dir)]

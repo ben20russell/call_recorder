@@ -2024,6 +2024,8 @@ function renderClaude() {
   const canOpenTerminal = s.claude_login_terminal !== false;
   $('#claude-login').hidden = useKey;
   $('#api-key-field').hidden = !useKey;
+  $('#openai-model-field').hidden = !useKey;
+  form.elements.claude_model.closest('label').hidden = useKey;
   const status = $('#claude-login-status');
   status.className = `pill${login.logged_in ? ' ok' : ' rec'}`;
   status.textContent = login.logged_in ? `Signed in${login.account ? ` as ${login.account}` : ''}`
@@ -2032,7 +2034,7 @@ function renderClaude() {
   $('#claude-signin').textContent = login.found ? 'Sign in with Claude…' : 'Install & sign in…';
   $('#claude-recheck').hidden = login.logged_in || canOpenTerminal;
   $('#claude-hint').textContent = useKey
-    ? (s.secrets.anthropic_api_key ? 'API key saved. Notes are billed to your Anthropic API account.' : 'Get a key at console.anthropic.com.')
+    ? (s.secrets.openai_api_key ? 'API key saved. Notes are billed to your OpenAI API account.' : 'Get a key at platform.openai.com/api-keys.')
     : login.logged_in ? 'Notes are written with your Claude account. No API key needed.'
     : canOpenTerminal
       ? 'Use your Claude Pro, Max, or eligible team account. If needed, Claude Code will be installed from Anthropic first; a Terminal window and browser will open.'

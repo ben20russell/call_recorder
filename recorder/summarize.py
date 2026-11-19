@@ -3,7 +3,7 @@
 Backends:
   cli  — (default) the Claude Code CLI in print mode, using the Claude account it's signed in to
          (./callrec login), so no API key is needed.
-  api  — Anthropic API (key from Keychain or ANTHROPIC_API_KEY).
+  api  — OpenAI API (key from Keychain or OPENAI_API_KEY).
   auto — api when a key is configured, otherwise cli.
 """
 
@@ -177,8 +177,9 @@ def find_claude_cli() -> str | None:
 
 
 def cli_env() -> dict:
-    # Without this, an exported API key would bill the API instead of the signed-in Claude account.
-    return {k: v for k, v in os.environ.items() if k not in ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN")}
+    # Keep API credentials out of the signed-in Claude CLI subprocess.
+    return {k: v for k, v in os.environ.items()
+            if k not in ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "OPENAI_API_KEY")}
 
 
 def cli_status() -> dict:
@@ -200,44 +201,44 @@ def backend(cfg: dict) -> str:
     choice = cfg.get("claude_backend", "cli")
     if choice != "auto":
         return choice
-    return "api" if config.get_secret("anthropic_api_key") else "cli"
+    return "api" if config.get_secret("openai_api_key") else "cli"
 
 
 def _via_api(system: str, prompt: str, cfg: dict) -> dict:
-    import anthropic
+    import openai
 
-    client = anthropic.Anthropic(api_key=config.get_secret("anthropic_api_key"))
-    model = cfg["claude_model"]
-    params = dict(
-        model=model,
-        max_tokens=32000,
-        system=system,
-        messages=[{"role": "user", "content": prompt}],
-        output_config={"effort": cfg.get("claude_effort", "medium"),
-                       "format": {"type": "json_schema", "schema": SCHEMA}},
-    )
-    # Server-side refusal fallback: if a safety classifier declines, the API retries on Anthropic's
-    # recommended fallback model inside the same call.
-    if model in ("claude-opus-5-5", "claude-opus-5", "claude-sonnet-5-5", "claude-fable-5-1"):
-        params.update(betas=["server-side-fallback-2026-07-01"], fallbacks="default")
+    api_key = config.get_secret("openai_api_key")
+    if not api_key:
+        raise SummaryError("Add an OpenAI API key in Settings → Claude.")
+    client = openai.OpenAI(api_key=api_key)
     try:
-        with client.beta.messages.stream(**params) as stream:
-            message = stream.get_final_message()
-    except anthropic.AuthenticationError:
-        raise SummaryError("The Anthropic API key was rejected. Update it in Settings.")
-    except anthropic.RateLimitError:
-        raise SummaryError("Anthropic API rate limit hit. Try Re-process in a minute.")
-    except anthropic.APIStatusError as e:
-        raise SummaryError(f"Anthropic API error {e.status_code}: {e.message}")
-    except anthropic.APIConnectionError:
-        raise SummaryError("Couldn't reach the Anthropic API. Check your internet connection.")
+        completion = client.chat.completions.create(
+            model=cfg.get("openai_model", "gpt-4.1-mini"),
+            max_completion_tokens=32000,
+            messages=[{"role": "system", "content": system},
+                      {"role": "user", "content": prompt}],
+            response_format={
+                "type": "json_schema",
+                "json_schema": {"name": "meeting_notes", "strict": True, "schema": SCHEMA},
+            },
+        )
+    except openai.AuthenticationError:
+        raise SummaryError("The OpenAI API key was rejected. Update it in Settings.")
+    except openai.RateLimitError:
+        raise SummaryError("OpenAI API rate limit hit. Try Re-process in a minute.")
+    except openai.APIStatusError as e:
+        raise SummaryError(f"OpenAI API error {e.status_code}: {e.message}")
+    except openai.APIConnectionError:
+        raise SummaryError("Couldn't reach the OpenAI API. Check your internet connection.")
 
-    if message.stop_reason == "refusal":
-        raise SummaryError("Claude declined to summarize this call.")
-    if message.stop_reason == "max_tokens":
-        raise SummaryError("Claude's response was cut off (max_tokens).")
-    text = next((b.text for b in message.content if b.type == "text"), "")
-    return json.loads(text)
+    message = completion.choices[0].message
+    if message.refusal:
+        raise SummaryError("OpenAI declined to summarize this call.")
+    if completion.choices[0].finish_reason == "length":
+        raise SummaryError("OpenAI's response was cut off (max_completion_tokens).")
+    if not message.content:
+        raise SummaryError("OpenAI returned an empty response. Try Re-process.")
+    return json.loads(message.content)
 
 
 NOT_SIGNED_IN = ("Claude isn't signed in. Open Settings → Claude → Sign in (or run ./callrec login), "
@@ -248,7 +249,7 @@ def _via_cli(system: str, prompt: str, cfg: dict, cancelled=None) -> dict:
     cli = find_claude_cli()
     if not cli:
         raise SummaryError("Claude Code wasn't found. It comes with the Claude desktop app; or switch "
-                           "Settings → Claude to an Anthropic API key.")
+                           "Settings → Claude to an OpenAI API key.")
     # Run as a plain one-shot completion: no tools, MCP servers, skills, hooks or settings from your own
     # Claude Code setup, in an empty folder so no project memory is picked up, and no saved session.
     workdir = config.CONFIG_DIR / "claude"

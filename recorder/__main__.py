@@ -117,9 +117,9 @@ def cmd_doctor(args, cfg):
         print(f"? whisper model: {cfg['whisper_model']}")
     secrets = config.secret_status()
     if backend(cfg) == "api":
-        print(f"{ok(secrets['anthropic_api_key'])} Claude: Anthropic API key "
-              f"{'set' if secrets['anthropic_api_key'] else 'not set — add one with ./callrec keys'}, "
-              f"model {cfg['claude_model']}")
+        print(f"{ok(secrets['openai_api_key'])} OpenAI API key "
+              f"{'set' if secrets['openai_api_key'] else 'not set — add one with ./callrec keys'}, "
+              f"model {cfg['openai_model']}")
     else:
         status = cli_status()
         if status["logged_in"]:
@@ -166,7 +166,7 @@ def cmd_login(args, cfg):
 
 def cmd_keys(args, cfg):
     print("Secrets are stored in your macOS Keychain (service “callrec”). Leave blank to keep the current value.")
-    for name, label in (("anthropic_api_key", "Anthropic API key (only if Settings → Claude uses a key)"),):
+    for name, label in (("openai_api_key", "OpenAI API key (only if Settings → Claude uses a key)"),):
         value = getpass.getpass(f"{label} ({'set' if config.get_secret(name) else 'not set'}): ").strip()
         if value:
             config.set_secret(name, value)
@@ -218,7 +218,7 @@ def main(argv=None):
     p = sub.add_parser("doctor", help="check setup and permissions")
     p.add_argument("--test", action="store_true", help="also record a 5-second test")
     sub.add_parser("login", help="sign in to Claude (notes are written with your Claude account)")
-    sub.add_parser("keys", help="set an Anthropic API key (optional)")
+    sub.add_parser("keys", help="set an OpenAI API key (optional)")
     p = sub.add_parser("notes", help="save a call's notes to Apple Notes")
     p.add_argument("meeting")
     p = sub.add_parser("ui", help="open the app UI in your browser")

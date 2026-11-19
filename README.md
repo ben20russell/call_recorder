@@ -39,6 +39,10 @@ account is required; this uses your Claude account rather than Anthropic API-key
 Recorder is running outside macOS, run `./callrec login` in that environment's terminal, then click
 **Check again** in Settings.
 
+To write notes using OpenAI instead, choose **An OpenAI API key** in Settings → Claude, enter your
+key, and select an OpenAI model. The key is stored in macOS Keychain (or a user-only
+`~/.callrec/secrets.json` on systems without Keychain); `OPENAI_API_KEY` can also be used instead.
+
 ## macOS app
 
 On macOS 14.2 or newer with Xcode Command Line Tools installed:

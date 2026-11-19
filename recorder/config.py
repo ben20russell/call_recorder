@@ -26,8 +26,9 @@ DEFAULTS = {
     "whisper_model": "mlx-community/whisper-large-v3-turbo",
     "language": "en",
     "keep_raw_pcm": False,
-    "claude_backend": "cli",  # cli: your Claude login via Claude Code | api: Anthropic API key
+    "claude_backend": "cli",  # cli: your Claude login via Claude Code | api: OpenAI API key
     "claude_model": "claude-opus-5-5",
+    "openai_model": "gpt-4.1-mini",
     "claude_effort": "medium",
     "port": 8765,
     "calendar": {
@@ -49,7 +50,7 @@ DEFAULTS = {
 
 # Secret name -> environment variable that overrides the Keychain value.
 SECRETS = {
-    "anthropic_api_key": "ANTHROPIC_API_KEY",
+    "openai_api_key": "OPENAI_API_KEY",
     "google_client_secret": "GOOGLE_CLIENT_SECRET",
     "google_refresh_token": "GOOGLE_REFRESH_TOKEN",
 }

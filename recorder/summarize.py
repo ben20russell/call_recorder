@@ -198,10 +198,7 @@ def cli_status() -> dict:
 
 
 def backend(cfg: dict) -> str:
-    choice = cfg.get("claude_backend", "cli")
-    if choice != "auto":
-        return choice
-    return "api" if config.get_secret("openai_api_key") else "cli"
+    return "api"
 
 
 def _via_api(system: str, prompt: str, cfg: dict) -> dict:

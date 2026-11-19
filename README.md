@@ -30,17 +30,9 @@ redirect URIs. Paste its client ID and secret, then choose **Sign in with Google
 verification requirements. Call Recorder requests read-only calendar access; the refresh token is
 stored in macOS Keychain (or a user-only `~/.callrec/secrets.json` on systems without Keychain).
 
-## Claude account
+## OpenAI API
 
-In Settings → Claude, choose **My Claude login (Claude Code)** and click **Install & sign in**.
-Call Recorder installs Claude Code using Anthropic's official installer when needed, then opens
-Terminal and your browser to sign in with your Claude account. A Claude Pro, Max, or eligible team
-account is required; this uses your Claude account rather than Anthropic API-key billing. If Call
-Recorder is running outside macOS, run `./callrec login` in that environment's terminal, then click
-**Check again** in Settings.
-
-To write notes using OpenAI instead, choose **An OpenAI API key** in Settings → Claude, enter your
-key, and select an OpenAI model. The key is stored in macOS Keychain (or a user-only
+In Settings → OpenAI, enter your key and select an OpenAI model. The key is stored in macOS Keychain (or a user-only
 `~/.callrec/secrets.json` on systems without Keychain); `OPENAI_API_KEY` can also be used instead.
 
 ## macOS app

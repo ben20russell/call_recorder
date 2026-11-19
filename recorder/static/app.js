@@ -1896,7 +1896,7 @@ async function openSettings() {
   }
   renderCalendarList(s);
   await loadGoogleCalendar(s);
-  renderClaude();
+  renderOpenAI();
   $('#settings-msg').textContent = '';
   $('#settings').showModal();
   loadPermissions();
@@ -2018,49 +2018,12 @@ $('#google-disconnect').addEventListener('click', async (e) => {
   }
 });
 
-function renderClaude() {
-  const s = state.settings, login = s.claude_login || {};
-  const useKey = form.elements.claude_backend.value === 'api';
-  const canOpenTerminal = s.claude_login_terminal !== false;
-  $('#claude-login').hidden = useKey;
-  $('#api-key-field').hidden = !useKey;
-  $('#openai-model-field').hidden = !useKey;
-  form.elements.claude_model.closest('label').hidden = useKey;
-  const status = $('#claude-login-status');
-  status.className = `pill${login.logged_in ? ' ok' : ' rec'}`;
-  status.textContent = login.logged_in ? `Signed in${login.account ? ` as ${login.account}` : ''}`
-    : login.found ? 'Not signed in' : 'Claude Code not installed';
-  $('#claude-signin').hidden = login.logged_in || !canOpenTerminal;
-  $('#claude-signin').textContent = login.found ? 'Sign in with Claude…' : 'Install & sign in…';
-  $('#claude-recheck').hidden = login.logged_in || canOpenTerminal;
-  $('#claude-hint').textContent = useKey
-    ? (s.secrets.openai_api_key ? 'API key saved. Notes are billed to your OpenAI API account.' : 'Get a key at platform.openai.com/api-keys.')
-    : login.logged_in ? 'Notes are written with your Claude account. No API key needed.'
-    : canOpenTerminal
-      ? 'Use your Claude Pro, Max, or eligible team account. If needed, Claude Code will be installed from Anthropic first; a Terminal window and browser will open.'
-      : 'In the VS Code terminal, run ./callrec login. If Claude Code is missing, the command prints the install step. Then click Check again.';
+function renderOpenAI() {
+  const s = state.settings;
+  $('#claude-hint').textContent = s.secrets.openai_api_key
+    ? 'API key saved. Notes are billed to your OpenAI API account.'
+    : 'Get a key at platform.openai.com/api-keys.';
 }
-
-form.elements.claude_backend.addEventListener('change', renderClaude);
-
-$('#claude-signin').addEventListener('click', async (e) => {
-  e.target.disabled = true;
-  try {
-    await api('/api/claude/login', {});
-    $('#claude-hint').textContent = 'Finish signing in in the Terminal window and your browser, then click Check again.';
-    $('#claude-recheck').hidden = false;
-  } catch (err) {
-    $('#settings-msg').textContent = err.message;
-  } finally {
-    e.target.disabled = false;
-  }
-});
-
-$('#claude-recheck').addEventListener('click', async () => {
-  try { state.settings.claude_login = await api('/api/claude/status'); } catch { /* keep last status */ }
-  $('#claude-recheck').hidden = !!state.settings.claude_login.logged_in;
-  renderClaude();
-});
 
 const PERMISSIONS = [
   ['microphone', 'Microphone', 'Your side of the call', 'Privacy_Microphone'],

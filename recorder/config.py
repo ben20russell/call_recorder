@@ -26,7 +26,7 @@ DEFAULTS = {
     "whisper_model": "mlx-community/whisper-large-v3-turbo",
     "language": "en",
     "keep_raw_pcm": False,
-    "claude_backend": "cli",  # cli: your Claude login via Claude Code | api: OpenAI API key
+    "claude_backend": "api",  # Legacy key; all summarization uses OpenAI.
     "claude_model": "claude-opus-5-5",
     "openai_model": "gpt-4.1-mini",
     "claude_effort": "medium",
